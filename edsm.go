@@ -1,59 +1,56 @@
 package edsm
 
 import (
-	"encoding/json"
+	"fmt"
 	"net/http"
+	"time"
 )
 
+type Endpoint string
+
+//go:generate versioner -bno build_no -pkg edsm ./VERSION ./version.go
+const (
+	Software = "goEDSMc"
+
+	// Life is the service endpoint for the life EDSM system
+	Life Endpoint = "https://www.edsm.net/"
+	// Test is the service endpoint recommended for testing clients
+	Test Endpoint = "https://beta.edsm.net/"
+
+	ConentType = "application/json; charset=utf-8"
+)
+
+var vStr string
+
+func VersionStr() string {
+	if len(vStr) == 0 {
+		vStr = fmt.Sprintf("%d.%d.%d%s", Major, Minor, Bugfix, Quality)
+	}
+	return vStr
+}
+
 type Credentials struct {
-	ApiKey string `json:"-,omitempty"`
+	EdsmCmdr string `json:",omitempty"`
+	ApiKey   string `json:",omitempty"`
 }
 
 type Service struct {
+	Endp  string
 	Creds *Credentials
+	Game  GameStateRd
+	Http  http.Client
 }
 
-func NewService() *Service {
-	res := &Service{}
+func NewService(endpoint Endpoint) *Service {
+	res := &Service{Endp: string(endpoint)}
+	res.Http.Timeout = 8 * time.Second
 	return res
 }
-
-const (
-	rqUrlSystem = "https://www.edsm.net/api-v1/system"
-)
 
 func (creds *Credentials) Clear() {
 	creds.ApiKey = "" // TODO is this secure… releasing that memory???
 }
 
-type RespSystem struct {
-	Id     int64  `json:"id"`
-	Name   string `json:"name"`
-	Coords struct {
-		X float64 `json:"x"`
-		Y float64 `json:"y"`
-		Z float64 `json:"z"`
-	} `json:"coords"`
-}
-
-func (srv *Service) System(name string) *RespSystem {
-	rq, _ := http.NewRequest("GET", rqUrlSystem, nil)
-	q := rq.URL.Query()
-	q.Set("systemName", name)
-	q.Set("showCoordinates", "1")
-	q.Set("showId", "1")
-	rq.URL.RawQuery = q.Encode()
-	rq.Header.Set("Accept", "application/json")
-	resp, err := http.DefaultClient.Do(rq)
-	if err != nil {
-		return nil
-	}
-	defer resp.Body.Close()
-	res := &RespSystem{}
-	json.NewDecoder(resp.Body).Decode(res)
-	if len(res.Name) == 0 {
-		return nil
-	} else {
-		return res
-	}
+func (s *Service) url(path string) string {
+	return s.Endp + path
 }
